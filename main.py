@@ -8,18 +8,20 @@ import json
 import logging
 import os
 import re
-import time
+from collections import Counter
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import fitz  # pymupdf
 import google.generativeai as genai
 from docx import Document
+from docx.enum.text import WD_LINE_SPACING
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from prompts import SYSTEM_PROMPT, build_file_prompt, build_user_prompt
+from prompts import SYSTEM_PROMPT, build_user_prompt
 
 load_dotenv()
 
@@ -58,43 +60,397 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — DOCX
 # ---------------------------------------------------------------------------
 
-def _extract_docx_text(file_bytes: bytes) -> str:
-    """Extrai texto de um arquivo DOCX usando python-docx."""
-    doc = Document(io.BytesIO(file_bytes))
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    # Inclui texto de tabelas também
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                if cell.text.strip():
-                    paragraphs.append(cell.text.strip())
-    return "\n".join(paragraphs)
+def _resolve_font_name(doc, style) -> str | None:
+    """Percorre a hierarquia de estilos para encontrar o primeiro nome de fonte explícito."""
+    seen: set = set()
+    while style and style.name not in seen:
+        seen.add(style.name)
+        fname = getattr(style.font, "name", None)
+        # Ignora referências de tema como "+Body" ou "+mn-lt"
+        if fname and not fname.startswith("+"):
+            return fname
+        style = getattr(style, "base_style", None)
+    return None
 
+
+def _describe_line_spacing(pf) -> str | None:
+    """Retorna descrição legível do espaçamento entre linhas de um parágrafo."""
+    try:
+        rule = pf.line_spacing_rule
+        ls = pf.line_spacing
+        if rule == WD_LINE_SPACING.SINGLE:
+            return "simples (1,0)"
+        if rule == WD_LINE_SPACING.ONE_POINT_FIVE:
+            return "1,5 linhas"
+        if rule == WD_LINE_SPACING.DOUBLE:
+            return "duplo (2,0)"
+        if rule == WD_LINE_SPACING.EXACTLY and ls:
+            return f"exato {ls.pt:.1f}pt"
+        if rule == WD_LINE_SPACING.MULTIPLE and ls:
+            return f"múltiplo {float(ls):.2f}x"
+        if rule == WD_LINE_SPACING.AT_LEAST and ls:
+            return f"mínimo {ls.pt:.1f}pt"
+    except Exception:
+        pass
+    return None
+
+
+def _extract_docx_text(file_bytes: bytes) -> str:
+    doc = Document(io.BytesIO(file_bytes))
+    out: list[str] = []
+
+    out.append("╔══════════════════════════════════════╗")
+    out.append("║  METADADOS DE FORMATAÇÃO — DOCX      ║")
+    out.append("╚══════════════════════════════════════╝")
+
+    # ── Margens e tamanho de página ───────────────────────────
+    for i, sec in enumerate(doc.sections, 1):
+        label = f"Seção {i}" if len(doc.sections) > 1 else "Documento"
+
+        def _cm(v):
+            try:
+                return f"{v.cm:.2f} cm"
+            except Exception:
+                return "não definido"
+
+        out.append(f"\nMARGENS ({label}):")
+        out.append(f"  Superior : {_cm(sec.top_margin)}")
+        out.append(f"  Inferior : {_cm(sec.bottom_margin)}")
+        out.append(f"  Esquerda : {_cm(sec.left_margin)}")
+        out.append(f"  Direita  : {_cm(sec.right_margin)}")
+        if sec.page_width and sec.page_height:
+            out.append(f"  Tamanho da página: {sec.page_width.cm:.1f} × {sec.page_height.cm:.1f} cm")
+        if sec.header_distance:
+            out.append(f"  Distância cabeçalho: {_cm(sec.header_distance)}")
+        if sec.footer_distance:
+            out.append(f"  Distância rodapé: {_cm(sec.footer_distance)}")
+
+    # ── Análise tipográfica ───────────────────────────────────
+    font_chars: Counter = Counter()
+    size_chars: Counter = Counter()
+    spacing_counter: Counter = Counter()
+    first_line_indents: list[float] = []
+    heading_samples: dict = {}
+
+    # Espaçamento do estilo Normal (herança base)
+    try:
+        normal_style = doc.styles["Normal"]
+        normal_ls = _describe_line_spacing(normal_style.paragraph_format)
+        if normal_ls:
+            out.append(f"\nEstilo Normal (padrão do documento): espaçamento {normal_ls}")
+        # Fonte padrão do Normal
+        normal_font = _resolve_font_name(doc, normal_style)
+        if normal_font:
+            out.append(f"Fonte padrão (estilo Normal): {normal_font}")
+        if normal_style.font.size:
+            try:
+                out.append(f"Tamanho padrão (estilo Normal): {normal_style.font.size.pt:.0f}pt")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        pf = para.paragraph_format
+        style = para.style
+
+        # Espaçamento: tenta no parágrafo, depois no estilo
+        ls = _describe_line_spacing(pf)
+        if not ls and style:
+            ls = _describe_line_spacing(style.paragraph_format)
+        if ls:
+            spacing_counter[ls] += len(text)
+
+        # Recuo de primeira linha
+        fi = pf.first_line_indent
+        if fi:
+            try:
+                val = fi.cm
+                if val > 0.05:
+                    first_line_indents.append(round(val, 2))
+            except Exception:
+                pass
+
+        # Detecção de nível de heading pelo nome do estilo
+        sname = style.name if style else ""
+        heading_level = None
+        for lvl in range(1, 7):
+            if f"Heading {lvl}" in sname:
+                heading_level = lvl
+                break
+
+        for run in para.runs:
+            if not run.text.strip():
+                continue
+
+            # Nome da fonte: run → estilo → hierarquia de estilos
+            fname = run.font.name
+            if not fname or fname.startswith("+"):
+                fname = _resolve_font_name(doc, style)
+            if fname:
+                font_chars[fname] += len(run.text)
+
+            # Tamanho: run → estilo
+            fsize = run.font.size
+            if not fsize and style:
+                fsize = getattr(style.font, "size", None)
+            if fsize:
+                try:
+                    pt = round(fsize.pt)
+                    size_chars[pt] += len(run.text)
+                    if heading_level is not None and heading_level not in heading_samples:
+                        bold = run.bold
+                        if bold is None and style:
+                            bold = getattr(style.font, "bold", None)
+                        heading_samples[heading_level] = (fname or "N/D", pt, bool(bold))
+                except Exception:
+                    pass
+
+    out.append("\nTIPOGRAFIA (extraída dos metadados do arquivo):")
+    if font_chars:
+        out.append("  Fontes detectadas (por volume de caracteres):")
+        for fname, cnt in font_chars.most_common(6):
+            out.append(f"    • {fname}: {cnt} chars")
+    else:
+        out.append("  Fontes: não detectadas diretamente nos runs (possível herança de tema)")
+
+    if size_chars:
+        out.append("  Tamanhos de fonte detectados:")
+        for sz, cnt in size_chars.most_common(8):
+            out.append(f"    • {sz}pt: {cnt} chars")
+
+    out.append("\nESPAÇAMENTO ENTRE LINHAS (por volume de texto):")
+    if spacing_counter:
+        for sp, cnt in spacing_counter.most_common(5):
+            out.append(f"  • {sp}: {cnt} chars")
+    else:
+        out.append("  Não detectado explicitamente nos parágrafos (pode estar herdado do tema/Normal)")
+
+    if first_line_indents:
+        avg = sum(first_line_indents) / len(first_line_indents)
+        out.append(f"\nRecuo de primeira linha (média amostral): {avg:.2f} cm")
+
+    if heading_samples:
+        out.append("\nEstilos de títulos detectados:")
+        for lvl in sorted(heading_samples):
+            fname, pt, bold = heading_samples[lvl]
+            out.append(f"  • Heading {lvl}: {fname} {pt}pt {'negrito' if bold else 'normal'}")
+
+    # ── Conteúdo com marcadores de estrutura ─────────────────
+    out.append("\n╔══════════════════════════════════════╗")
+    out.append("║       CONTEÚDO DO DOCUMENTO          ║")
+    out.append("╚══════════════════════════════════════╝")
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        sname = para.style.name if para.style else ""
+        prefix = ""
+        for lvl in range(1, 7):
+            if f"Heading {lvl}" in sname:
+                prefix = f"[H{lvl}] "
+                break
+        if not prefix:
+            if "Title" in sname:
+                prefix = "[TÍTULO] "
+            elif "Subtitle" in sname:
+                prefix = "[SUBTÍTULO] "
+            else:
+                runs_with_text = [r for r in para.runs if r.text.strip()]
+                if runs_with_text and all(r.bold for r in runs_with_text):
+                    prefix = "[NEGRITO] "
+
+        out.append(f"{prefix}{text}")
+
+    for table in doc.tables:
+        out.append("\n[TABELA]")
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                out.append("  " + " | ".join(cells))
+
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Helpers — PDF
+# ---------------------------------------------------------------------------
+
+def _clean_font_name(raw: str) -> str:
+    """Remove prefixo de subset (ABCDEF+) e sufixos comuns de nomes de fonte PDF."""
+    name = raw.split("+")[-1] if "+" in raw else raw
+    for sfx in ["-Bold", "-Italic", "-BoldItalic", "-Regular", "MT", "PS", "-Roman", "-Light", "-Medium"]:
+        name = name.replace(sfx, "")
+    return name.strip()
+
+
+def _extract_pdf_text(file_bytes: bytes) -> str:
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    out: list[str] = []
+
+    font_chars: Counter = Counter()
+    size_chars: Counter = Counter()
+    page_margins: list[dict] = []
+    # Armazena conteúdo por página: lista de (texto, tamanho, is_bold)
+    content_pages: list[tuple[int, list[tuple[str, float, bool]]]] = []
+
+    first_page_size: tuple[float, float] | None = None
+
+    for page_num in range(doc.page_count):
+        page = doc[page_num]
+        pw = page.rect.width
+        ph = page.rect.height
+
+        if page_num == 0:
+            first_page_size = (pw * 0.0352778, ph * 0.0352778)
+
+        page_dict = page.get_text(
+            "dict",
+            flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE,
+        )
+
+        min_x, max_x = pw, 0.0
+        min_y, max_y = ph, 0.0
+        page_lines: list[tuple[str, float, bool]] = []
+
+        for block in page_dict.get("blocks", []):
+            if block.get("type") != 0:  # 0 = bloco de texto
+                continue
+            bx0, by0, bx1, by1 = block["bbox"]
+            # Ignora fragmentos minúsculos (artefatos)
+            if (bx1 - bx0) < 5 or (by1 - by0) < 2:
+                continue
+            min_x = min(min_x, bx0)
+            max_x = max(max_x, bx1)
+            min_y = min(min_y, by0)
+            max_y = max(max_y, by1)
+
+            for line in block.get("lines", []):
+                line_parts: list[str] = []
+                line_max_size = 0.0
+                line_has_bold = False
+
+                for span in line.get("spans", []):
+                    stext = span.get("text", "")
+                    ssize = span.get("size", 0.0)
+                    sflags = span.get("flags", 0)
+                    sfont = span.get("font", "")
+
+                    if not stext.strip():
+                        continue
+
+                    line_parts.append(stext)
+                    line_max_size = max(line_max_size, ssize)
+                    if sflags & 16:  # bit 4 = bold
+                        line_has_bold = True
+
+                    # Contadores de fonte e tamanho
+                    clean = _clean_font_name(sfont)
+                    if clean:
+                        font_chars[clean] += len(stext.strip())
+                    if ssize > 0:
+                        size_chars[round(ssize)] += len(stext.strip())
+
+                full_line = "".join(line_parts).strip()
+                if full_line:
+                    page_lines.append((full_line, line_max_size, line_has_bold))
+
+        # Margens inferidas (primeiras 5 páginas)
+        if page_num < 5 and min_x < pw and min_y < ph:
+            page_margins.append({
+                "page": page_num + 1,
+                "top": round(min_y * 0.0352778, 2),
+                "bottom": round((ph - max_y) * 0.0352778, 2),
+                "left": round(min_x * 0.0352778, 2),
+                "right": round((pw - max_x) * 0.0352778, 2),
+            })
+
+        content_pages.append((page_num + 1, page_lines))
+
+    doc.close()
+
+    # ── Cabeçalho de metadados ────────────────────────────────
+    out.append("╔══════════════════════════════════════╗")
+    out.append("║   METADADOS DE FORMATAÇÃO — PDF      ║")
+    out.append("╚══════════════════════════════════════╝")
+    out.append(f"Total de páginas: {len(content_pages)}")
+
+    if first_page_size:
+        w, h = first_page_size
+        out.append(f"Tamanho da página: {w:.1f} × {h:.1f} cm  (A4 padrão = 21,0 × 29,7 cm)")
+
+    if page_margins:
+        out.append("\nMARGENS INFERIDAS (posição dos blocos de texto vs. borda da página):")
+        out.append("  Nota: cabeçalhos e rodapés podem influenciar os valores de sup/inf.")
+        for pm in page_margins:
+            out.append(
+                f"  Pág {pm['page']}: "
+                f"sup {pm['top']:.2f} cm | "
+                f"inf {pm['bottom']:.2f} cm | "
+                f"esq {pm['left']:.2f} cm | "
+                f"dir {pm['right']:.2f} cm"
+            )
+
+    out.append("\nTIPOGRAFIA (extraída dos metadados do PDF):")
+    if font_chars:
+        out.append("  Fontes detectadas (por volume de caracteres):")
+        for fname, cnt in font_chars.most_common(6):
+            out.append(f"    • {fname}: {cnt} chars")
+    if size_chars:
+        out.append("  Tamanhos de fonte detectados:")
+        for sz, cnt in size_chars.most_common(8):
+            out.append(f"    • {sz}pt: {cnt} chars")
+
+    # ── Conteúdo com marcadores estruturais ──────────────────
+    out.append("\n╔══════════════════════════════════════╗")
+    out.append("║       CONTEÚDO DO DOCUMENTO          ║")
+    out.append("╚══════════════════════════════════════╝")
+
+    body_size = size_chars.most_common(1)[0][0] if size_chars else 12
+
+    for page_num, lines in content_pages:
+        out.append(f"\n--- Página {page_num} ---")
+        for line_text, line_size, line_bold in lines:
+            prefix = ""
+            if line_size > body_size + 3:
+                prefix = f"[TÍTULO {round(line_size)}pt] "
+            elif line_bold and line_size >= body_size:
+                prefix = "[NEGRITO] "
+            out.append(f"{prefix}{line_text}")
+
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Helpers — Gemini
+# ---------------------------------------------------------------------------
 
 def _parse_gemini_response(raw: str) -> dict:
     """
     Extrai JSON da resposta do Gemini.
-    O modelo às vezes envolve o JSON em markdown mesmo sendo instruído a não fazer isso —
-    este parser tenta recuperar o JSON puro em qualquer formato de resposta.
+    O modelo às vezes envolve o JSON em markdown mesmo sendo instruído a não fazer isso.
     """
     text = raw.strip()
 
-    # Remover bloco de código markdown se presente
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
         text = text.strip()
 
-    # Tentar parse direto
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Tentar encontrar o primeiro objeto JSON no texto
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:
@@ -106,10 +462,7 @@ def _parse_gemini_response(raw: str) -> dict:
 
 
 def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
-    """
-    Chama o Gemini usando o texto extraído do documento (fluxo DOCX).
-    O conteúdo é passado diretamente no prompt de texto.
-    """
+    """Chama o Gemini com o conteúdo extraído do documento como texto."""
     model = genai.GenerativeModel(
         model_name=MODEL_NAME,
         system_instruction=SYSTEM_PROMPT,
@@ -118,57 +471,12 @@ def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
     response = model.generate_content(
         user_prompt,
         generation_config=genai.GenerationConfig(
-            temperature=0.1,   # baixa temperatura para avaliação determinística
+            temperature=0.1,
             max_output_tokens=4096,
         ),
+        request_options={"timeout": 120},
     )
     return _parse_gemini_response(response.text)
-
-
-def _call_gemini_with_file(file_bytes: bytes, mime_type: str, extra_context: str) -> dict:
-    """
-    Chama o Gemini usando a File API para envio multimodal do PDF.
-    O arquivo é enviado, processado e depois deletado para não acumular na conta.
-    """
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=SYSTEM_PROMPT,
-    )
-
-    # Upload via File API — o Gemini processa o PDF diretamente (OCR + estrutura)
-    uploaded_file = genai.upload_file(
-        path=io.BytesIO(file_bytes),
-        mime_type=mime_type,
-        display_name="trabalho_academico",
-    )
-
-    # Aguardar o arquivo ficar disponível (estado ACTIVE)
-    max_wait = 30
-    waited = 0
-    while uploaded_file.state.name == "PROCESSING" and waited < max_wait:
-        time.sleep(2)
-        waited += 2
-        uploaded_file = genai.get_file(uploaded_file.name)
-
-    if uploaded_file.state.name != "ACTIVE":
-        raise RuntimeError(f"Arquivo não ficou ativo após {max_wait}s: {uploaded_file.state.name}")
-
-    try:
-        user_prompt = build_file_prompt(extra_context)
-        response = model.generate_content(
-            [uploaded_file, user_prompt],
-            generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=4096,
-            ),
-        )
-        return _parse_gemini_response(response.text)
-    finally:
-        # Limpar o arquivo do Gemini imediatamente após o uso
-        try:
-            genai.delete_file(uploaded_file.name)
-        except Exception as e:
-            logger.warning("Falha ao deletar arquivo do Gemini: %s", e)
 
 
 # ---------------------------------------------------------------------------
@@ -205,13 +513,10 @@ async def analyze_document(
             detail="Serviço não configurado: GEMINI_API_KEY ausente. Contate o administrador.",
         )
 
-    # Validar tipo de arquivo
     content_type = file.content_type or ""
-    # Normalizar content_type que às vezes vem com charset
     content_type_base = content_type.split(";")[0].strip()
-
-    # Aceitar também por extensão de nome de arquivo como fallback
     filename = file.filename or ""
+
     if content_type_base not in ALLOWED_MIME_TYPES:
         if filename.lower().endswith(".pdf"):
             content_type_base = "application/pdf"
@@ -223,7 +528,6 @@ async def analyze_document(
                 detail=f"Tipo de arquivo não suportado: '{content_type}'. Envie um PDF ou DOCX.",
             )
 
-    # Ler arquivo em memória
     file_bytes = await file.read()
 
     if len(file_bytes) == 0:
@@ -245,17 +549,17 @@ async def analyze_document(
 
     try:
         if content_type_base == "application/pdf":
-            # PDF: enviar diretamente ao Gemini via File API (processamento multimodal)
-            result = _call_gemini_with_file(file_bytes, content_type_base, context)
+            document_text = _extract_pdf_text(file_bytes)
         else:
-            # DOCX: extrair texto com python-docx e enviar como texto plano
             document_text = _extract_docx_text(file_bytes)
-            if not document_text.strip():
-                raise HTTPException(
-                    status_code=422,
-                    detail="Não foi possível extrair texto do DOCX. O arquivo pode estar corrompido.",
-                )
-            result = _call_gemini_with_text(document_text, context)
+
+        if not document_text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Não foi possível extrair conteúdo do arquivo. O arquivo pode estar corrompido ou protegido.",
+            )
+
+        result = _call_gemini_with_text(document_text, context)
 
     except HTTPException:
         raise
@@ -266,7 +570,6 @@ async def analyze_document(
             detail=f"Erro ao analisar o documento: {str(e)}. Tente novamente.",
         )
 
-    # Garantir campos mínimos na resposta mesmo se o modelo retornar algo inesperado
     result.setdefault("score", "0%")
     result.setdefault("criteria", [])
     result.setdefault("suggestions", [])
