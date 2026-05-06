@@ -390,7 +390,9 @@ def _extract_pdf_text(file_bytes: bytes) -> str:
 
     if page_margins:
         out.append("\nMARGENS INFERIDAS (posição dos blocos de texto vs. borda da página):")
-        out.append("  Nota: cabeçalhos e rodapés podem influenciar os valores de sup/inf.")
+        out.append("  ATENÇÃO: valores aproximados com imprecisão de ±0,5 cm — o texto não")
+        out.append("  preenche até a borda exata da margem. Use tolerância de ±0,5 cm ao avaliar.")
+        out.append("  Cabeçalhos e rodapés podem reduzir artificialmente sup/inf.")
         for pm in page_margins:
             out.append(
                 f"  Pág {pm['page']}: "

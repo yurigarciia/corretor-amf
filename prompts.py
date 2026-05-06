@@ -61,6 +61,11 @@ PASSO 2 — DEMAIS REGRAS:
 5. Se o documento claramente não for um trabalho acadêmico, retorne JSON com \
 "error" explicativo e listas vazias.
 6. Em caso de dúvida genuína sobre conformidade, prefira "warn" a "fail".
+6a. TOLERÂNCIA DE MARGENS: margens inferidas de PDF por posição de texto têm \
+imprecisão inerente de ±0,5 cm (o texto não ocupa toda a área até a margem). \
+Considere CONFORME qualquer margem dentro de ±0,5 cm do valor esperado. \
+Só marque "fail" se a divergência for superior a 0,5 cm. \
+Para DOCX, os valores vêm dos metadados reais do arquivo — use tolerância de ±0,1 cm.
 7. O score reflete a proporção de "pass" sobre o total de critérios avaliáveis \
 (critérios marcados como "warn" por impossibilidade de verificação não entram no denominador).
 8. Sugestões: primeiro os "fail", depois os "warn".
