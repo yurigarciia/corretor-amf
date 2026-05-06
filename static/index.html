@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CorretorAMF — Verificador de Conformidade Acadêmica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:        #2952CC;
+      --blue-light:  #3D6BE8;
+      --blue-dark:   #1A3A9C;
+      --blue-glow:   rgba(41, 82, 204, 0.35);
+      --bg:          #0D0F14;
+      --bg-card:     #141720;
+      --bg-card2:    #1A1E2B;
+      --border:      rgba(255,255,255,0.07);
+      --text:        #E8EAF0;
+      --text-muted:  #7A8099;
+      --pass:        #22C55E;
+      --pass-bg:     rgba(34, 197, 94, 0.12);
+      --warn:        #F59E0B;
+      --warn-bg:     rgba(245, 158, 11, 0.12);
+      --fail:        #EF4444;
+      --fail-bg:     rgba(239, 68, 68, 0.12);
+      --radius:      12px;
+      --radius-sm:   8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+      /* Grid texture sutil */
+      background-image:
+        linear-gradient(rgba(41, 82, 204, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41, 82, 204, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────────── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────── */
+    header {
+      padding: 48px 0 32px;
+      text-align: center;
+    }
+
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(41, 82, 204, 0.15);
+      border: 1px solid rgba(41, 82, 204, 0.3);
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #7FA8FF;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .logo-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--blue-light);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, #7FA8FF 0%, #2952CC 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    /* ── Upload Card ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Drop Zone ────────────────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--blue);
+      background: rgba(41, 82, 204, 0.05);
+    }
+
+    .drop-zone.has-file {
+      border-color: var(--blue);
+      border-style: solid;
+      background: rgba(41, 82, 204, 0.08);
+    }
+
+    #file-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .drop-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .file-selected {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: rgba(41, 82, 204, 0.12);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-top: 16px;
+      text-align: left;
+    }
+
+    .file-selected.visible { display: flex; }
+
+    .file-icon {
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+
+    .file-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-size {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .file-remove {
+      margin-left: auto;
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.2s;
+    }
+
+    .file-remove:hover { color: var(--fail); }
+
+    /* ── Textarea de Contexto ─────────────────────────────────────────── */
+    .context-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .context-label .optional {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    textarea {
+      width: 100%;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      padding: 12px 16px;
+      resize: vertical;
+      min-height: 90px;
+      transition: border-color 0.2s;
+      line-height: 1.5;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    textarea::placeholder { color: var(--text-muted); }
+
+    /* ── Botão Principal ──────────────────────────────────────────────── */
+    .btn-primary {
+      width: 100%;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 14px 24px;
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--blue-light);
+      box-shadow: 0 0 24px var(--blue-glow);
+    }
+
+    .btn-primary:active:not(:disabled) { transform: scale(0.99); }
+
+    .btn-primary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* ── Loading ──────────────────────────────────────────────────────── */
+    .loading-section {
+      display: none;
+      text-align: center;
+      padding: 56px 24px;
+    }
+
+    .loading-section.visible { display: block; }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(41, 82, 204, 0.2);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .loading-steps {
+      list-style: none;
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    .loading-steps li {
+      padding: 3px 0;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.4s, transform 0.4s;
+    }
+
+    .loading-steps li.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Erro ─────────────────────────────────────────────────────────── */
+    .error-section {
+      display: none;
+      background: var(--fail-bg);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .error-section.visible { display: block; }
+
+    .error-icon { font-size: 2rem; margin-bottom: 10px; }
+
+    .error-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--fail);
+    }
+
+    .error-msg { font-size: 0.9rem; color: var(--text-muted); }
+
+    /* ── Resultado ────────────────────────────────────────────────────── */
+    .result-section { display: none; }
+    .result-section.visible { display: block; }
+
+    /* Score hero */
+    .score-hero {
+      text-align: center;
+      padding: 40px 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .score-hero::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: 50%;
+      transform: translateX(-50%);
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, var(--blue-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .score-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .score-value {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(3rem, 8vw, 5rem);
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
+    .score-value.high  { color: var(--pass); }
+    .score-value.mid   { color: var(--warn); }
+    .score-value.low   { color: var(--fail); }
+
+    .score-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Cards de resumo */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 540px) {
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+
+    .summary-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .summary-card.pass-card { border-color: rgba(34,197,94,0.2); }
+    .summary-card.warn-card { border-color: rgba(245,158,11,0.2); }
+    .summary-card.fail-card { border-color: rgba(239,68,68,0.2); }
+
+    .summary-num {
+      font-family: 'Syne', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .pass-card .summary-num { color: var(--pass); }
+    .warn-card .summary-num { color: var(--warn); }
+    .fail-card .summary-num { color: var(--fail); }
+
+    .summary-lbl {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Lista de critérios */
+    .criteria-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .criterion-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .criterion-item.pass { border-left: 3px solid var(--pass); }
+    .criterion-item.warn { border-left: 3px solid var(--warn); }
+    .criterion-item.fail { border-left: 3px solid var(--fail); }
+
+    .criterion-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+
+    .criterion-body { flex: 1; min-width: 0; }
+
+    .criterion-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+
+    .criterion-name {
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    .status-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 100px;
+    }
+
+    .badge-pass { background: var(--pass-bg); color: var(--pass); }
+    .badge-warn { background: var(--warn-bg); color: var(--warn); }
+    .badge-fail { background: var(--fail-bg); color: var(--fail); }
+
+    .criterion-detail {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Sugestões */
+    .suggestions-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(41, 82, 204, 0.25);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .suggestions-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .suggestions-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .suggestions-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .suggestions-list li::before {
+      content: '→';
+      color: var(--blue-light);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Botão nova análise */
+    .btn-secondary {
+      width: 100%;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 24px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 48px;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--blue);
+      color: var(--text);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 32px 0 48px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    footer a { color: var(--blue-light); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Seção headings ───────────────────────────────────────────────── */
+    .section-heading {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Divider ──────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-badge">
+      <span class="dot"></span>
+      IA — AMF 2026/01
+    </div>
+    <h1>Corretor<span>AMF</span></h1>
+    <p class="subtitle">
+      Verifique se o seu trabalho acadêmico está em conformidade com as normas
+      oficiais da Antonio Meneghetti Faculdade antes de entregar ao professor.
+    </p>
+  </header>
+
+  <!-- Seção de Upload (estado inicial) -->
+  <section id="upload-section">
+    <div class="card">
+      <p class="card-title">Enviar Trabalho</p>
+
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".pdf,.docx" />
+        <span class="drop-icon">📄</span>
+        <div class="drop-title">Arraste o arquivo aqui ou clique para selecionar</div>
+        <div class="drop-sub">PDF ou DOCX • Máximo 10 MB</div>
+      </div>
+
+      <div class="file-selected" id="file-selected">
+        <span class="file-icon" id="file-icon">📄</span>
+        <div>
+          <div class="file-name" id="file-name"></div>
+          <div class="file-size" id="file-size"></div>
+        </div>
+        <button class="file-remove" id="file-remove" title="Remover arquivo">✕</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="context-label">
+        <span>Contexto adicional</span>
+        <span class="optional">opcional</span>
+      </div>
+      <textarea
+        id="context-input"
+        placeholder="Ex.: Trabalho de Engenharia de Software, entrega parcial, capa não obrigatória conforme orientação do professor..."
+        rows="3"
+      ></textarea>
+    </div>
+
+    <button class="btn-primary" id="analyze-btn" disabled>
+      <span>🔍</span> Analisar conformidade
+    </button>
+  </section>
+
+  <!-- Loading -->
+  <section class="loading-section" id="loading-section">
+    <div class="spinner"></div>
+    <div class="loading-title">Analisando seu trabalho…</div>
+    <ul class="loading-steps" id="loading-steps">
+      <li id="step-1">📤 Enviando arquivo ao servidor</li>
+      <li id="step-2">🔍 Extraindo conteúdo do documento</li>
+      <li id="step-3">🤖 Consultando IA com as normas AMF</li>
+      <li id="step-4">📊 Gerando relatório de conformidade</li>
+    </ul>
+  </section>
+
+  <!-- Erro -->
+  <section class="error-section" id="error-section">
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">Algo deu errado</div>
+    <div class="error-msg" id="error-msg">Tente novamente em alguns instantes.</div>
+    <button class="btn-secondary" style="margin-top:16px; width:auto; padding: 10px 24px;" onclick="resetApp()">
+      ↩ Tentar novamente
+    </button>
+  </section>
+
+  <!-- Resultado -->
+  <section class="result-section" id="result-section">
+
+    <!-- Score hero -->
+    <div class="score-hero">
+      <div class="score-label">Conformidade geral</div>
+      <div class="score-value" id="score-value">—</div>
+      <div class="score-desc" id="score-desc"></div>
+    </div>
+
+    <!-- Cards de resumo -->
+    <div class="summary-grid">
+      <div class="summary-card pass-card">
+        <div class="summary-num" id="count-pass">0</div>
+        <div class="summary-lbl">✅ Conformes</div>
+      </div>
+      <div class="summary-card warn-card">
+        <div class="summary-num" id="count-warn">0</div>
+        <div class="summary-lbl">⚠️ Atenção</div>
+      </div>
+      <div class="summary-card fail-card">
+        <div class="summary-num" id="count-fail">0</div>
+        <div class="summary-lbl">❌ Não conformes</div>
+      </div>
+    </div>
+
+    <!-- Lista de critérios -->
+    <div class="section-heading">📋 Critérios avaliados</div>
+    <div class="criteria-list" id="criteria-list"></div>
+
+    <!-- Sugestões -->
+    <div class="suggestions-card" id="suggestions-card" style="display:none;">
+      <div class="suggestions-title">💡 Sugestões de correção</div>
+      <ul class="suggestions-list" id="suggestions-list"></ul>
+    </div>
+
+    <!-- Nova análise -->
+    <button class="btn-secondary" onclick="resetApp()">
+      ↩ Nova análise
+    </button>
+
+  </section>
+
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    CorretorAMF — Trabalho Acadêmico · IA 2026/01 · Antonio Meneghetti Faculdade
+    <br />
+    Powered by <a href="https://deepmind.google/technologies/gemini/" target="_blank" rel="noopener">Google Gemini</a>
+    &nbsp;·&nbsp;
+    Avaliação baseada exclusivamente nas normas oficiais da AMF
+  </div>
+</footer>
+
+<script>
+  /* ── Estado da aplicação ──────────────────────────────────────────── */
+  let selectedFile = null;
+
+  /* ── Referências DOM ──────────────────────────────────────────────── */
+  const uploadSection   = document.getElementById('upload-section');
+  const loadingSection  = document.getElementById('loading-section');
+  const errorSection    = document.getElementById('error-section');
+  const resultSection   = document.getElementById('result-section');
+  const dropZone        = document.getElementById('drop-zone');
+  const fileInput       = document.getElementById('file-input');
+  const fileSelected    = document.getElementById('file-selected');
+  const fileName        = document.getElementById('file-name');
+  const fileSize        = document.getElementById('file-size');
+  const fileIcon        = document.getElementById('file-icon');
+  const fileRemove      = document.getElementById('file-remove');
+  const analyzeBtn      = document.getElementById('analyze-btn');
+  const contextInput    = document.getElementById('context-input');
+  const loadingSteps    = document.getElementById('loading-steps');
+  const errorMsg        = document.getElementById('error-msg');
+
+  /* ── Drag & Drop ─────────────────────────────────────────────────── */
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  fileRemove.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearFile();
+  });
+
+  /* ── Seleção de arquivo ───────────────────────────────────────────── */
+  function setFile(file) {
+    const allowed = ['application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (!allowed.includes(file.type) && ext !== 'pdf' && ext !== 'docx') {
+      showError('Formato inválido. Envie um arquivo PDF ou DOCX.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showError(`Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)} MB. Limite: 10 MB.`);
+      return;
+    }
+
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileSize.textContent = formatSize(file.size);
+    fileIcon.textContent = ext === 'pdf' ? '📕' : '📘';
+    fileSelected.classList.add('visible');
+    dropZone.classList.add('has-file');
+    analyzeBtn.disabled = false;
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileSelected.classList.remove('visible');
+    dropZone.classList.remove('has-file');
+    analyzeBtn.disabled = true;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  /* ── Animação dos passos de loading ──────────────────────────────── */
+  let stepTimers = [];
+
+  function animateLoadingSteps() {
+    const steps = loadingSteps.querySelectorAll('li');
+    steps.forEach(s => s.classList.remove('visible'));
+    stepTimers.forEach(clearTimeout);
+    stepTimers = [];
+    const delays = [200, 1800, 4000, 10000];
+    steps.forEach((step, i) => {
+      stepTimers.push(setTimeout(() => step.classList.add('visible'), delays[i]));
+    });
+  }
+
+  /* ── Análise principal ────────────────────────────────────────────── */
+  analyzeBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    showLoading();
+    animateLoadingSteps();
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('context', contextInput.value.trim());
+
+    try {
+      const res = await fetch('/analyze', {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(90000),   // 90s timeout no cliente
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data.detail || `Erro ${res.status}: ${res.statusText}`;
+        showError(msg);
+        return;
+      }
+
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+
+      renderResult(data);
+
+    } catch (err) {
+      if (err.name === 'TimeoutError') {
+        showError('A análise demorou mais do que o esperado. Tente novamente com um arquivo menor.');
+      } else {
+        showError('Falha na comunicação com o servidor. Verifique sua conexão e tente novamente.');
+      }
+    }
+  });
+
+  /* ── Renderização do resultado ────────────────────────────────────── */
+  function renderResult(data) {
+    // Score
+    const scoreEl = document.getElementById('score-value');
+    const scoreNum = parseInt(data.score, 10) || 0;
+    scoreEl.textContent = data.score;
+    scoreEl.className = 'score-value ' + (scoreNum >= 75 ? 'high' : scoreNum >= 45 ? 'mid' : 'low');
+
+    const descMap = [
+      [75, '🎉 Excelente! Seu trabalho está bem formatado.'],
+      [45, '👍 Bom, mas há pontos a melhorar antes de entregar.'],
+      [0,  '⚠️ Seu trabalho precisa de revisão significativa de formatação.'],
+    ];
+    document.getElementById('score-desc').textContent =
+      descMap.find(([threshold]) => scoreNum >= threshold)?.[1] ?? '';
+
+    // Contadores
+    const criteria = data.criteria || [];
+    const counts = { pass: 0, warn: 0, fail: 0 };
+    criteria.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
+
+    document.getElementById('count-pass').textContent = counts.pass;
+    document.getElementById('count-warn').textContent = counts.warn;
+    document.getElementById('count-fail').textContent = counts.fail;
+
+    // Lista de critérios — ordenada: fail → warn → pass
+    const sorted = [
+      ...criteria.filter(c => c.status === 'fail'),
+      ...criteria.filter(c => c.status === 'warn'),
+      ...criteria.filter(c => c.status === 'pass'),
+    ];
+
+    const iconMap = { pass: '✅', warn: '⚠️', fail: '❌' };
+    const labelMap = { pass: 'Conforme', warn: 'Atenção', fail: 'Não conforme' };
+
+    const list = document.getElementById('criteria-list');
+    list.innerHTML = sorted.map(c => `
+      <div class="criterion-item ${c.status}">
+        <span class="criterion-icon">${iconMap[c.status] || '❓'}</span>
+        <div class="criterion-body">
+          <div class="criterion-header">
+            <span class="criterion-name">${escapeHtml(c.name)}</span>
+            <span class="status-badge badge-${c.status}">${labelMap[c.status] || c.status}</span>
+          </div>
+          <div class="criterion-detail">${escapeHtml(c.detail)}</div>
+        </div>
+      </div>
+    `).join('');
+
+    // Sugestões
+    const suggestions = data.suggestions || [];
+    const sugCard = document.getElementById('suggestions-card');
+    if (suggestions.length > 0) {
+      const sugList = document.getElementById('suggestions-list');
+      sugList.innerHTML = suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+      sugCard.style.display = 'block';
+    } else {
+      sugCard.style.display = 'none';
+    }
+
+    showResult();
+  }
+
+  /* ── Utilitários de estado ────────────────────────────────────────── */
+  function showLoading() {
+    uploadSection.style.display   = 'none';
+    errorSection.classList.remove('visible');
+    resultSection.classList.remove('visible');
+    loadingSection.classList.add('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showResult() {
+    stepTimers.forEach(clearTimeout);
+    loadingSection.classList.remove('visible');
+    errorSection.classList.remove('visible');
+    resultSection.classList.add('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showError(msg) {
+    stepTimers.forEach(clearTimeout);
+    loadingSection.classList.remove('visible');
+    uploadSection.style.display = 'block';
+    resultSection.classList.remove('visible');
+    errorMsg.textContent = msg;
+    errorSection.classList.add('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetApp() {
+    stepTimers.forEach(clearTimeout);
+    clearFile();
+    contextInput.value = '';
+    uploadSection.style.display   = 'block';
+    loadingSection.classList.remove('visible');
+    errorSection.classList.remove('visible');
+    resultSection.classList.remove('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+
+</body>
+</html>

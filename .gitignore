@@ -1,0 +1,49 @@
+# Variáveis de ambiente — NUNCA versionar a chave da API
+.env
+
+# Ambiente virtual Python
+.venv/
+venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Distribuição / build
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Ferramentas de desenvolvimento
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code
+.claude/
+
+# Arquivos temporários de upload (caso algum teste grave em disco)
+uploads/
+tmp/
+
+# Manual original da AMF (direitos autorais — não versionar)
+*.pdf
