@@ -562,16 +562,15 @@
       margin-top: 1px;
     }
 
-    /* Botão nova análise */
+    /* Botão secundário (modal) */
     .btn-secondary {
-      width: 100%;
       background: transparent;
       color: var(--text-muted);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 12px 24px;
+      padding: 10px 20px;
       font-family: 'DM Sans', sans-serif;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 500;
       cursor: pointer;
       transition: border-color 0.2s, color 0.2s;
@@ -579,12 +578,65 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      margin-bottom: 48px;
     }
 
     .btn-secondary:hover {
       border-color: var(--blue);
       color: var(--text);
+    }
+
+    /* Botões de ação pós-resultado */
+    .result-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+
+    .btn-reset {
+      background: transparent;
+      color: #7FA8FF;
+      border: 1px solid rgba(63, 107, 232, 0.35);
+      border-radius: var(--radius-sm);
+      padding: 11px 32px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-reset:hover {
+      border-color: var(--blue-light);
+      color: #fff;
+      background: rgba(41, 82, 204, 0.12);
+    }
+
+    .btn-prompt {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 8px 18px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      opacity: 0.75;
+      transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-prompt:hover {
+      opacity: 1;
+      background: var(--blue-light);
+      box-shadow: 0 0 14px var(--blue-glow);
     }
 
     /* ── Aviso IA ────────────────────────────────────────────────────── */
@@ -872,12 +924,12 @@
     </div>
 
     <!-- Ações -->
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <button class="btn-secondary" id="prompt-btn" onclick="openPromptModal()">
-        ✨ Gerar Prompt de Correção
-      </button>
-      <button class="btn-secondary" onclick="resetApp()">
+    <div class="result-actions">
+      <button class="btn-reset" onclick="resetApp()">
         ↩ Nova análise
+      </button>
+      <button class="btn-prompt" id="prompt-btn" onclick="openPromptModal()">
+        ✨ Gerar Prompt de Correção
       </button>
     </div>
 
@@ -903,7 +955,7 @@
       <button class="btn-secondary" onclick="closePromptModal()">Fechar</button>
       <button class="btn-copy" id="copy-btn" onclick="copyPrompt()">
         <span id="copy-icon">📋</span>
-        <span id="copy-label">Copiar prompt</span>
+        <span id="copy-label">Copiar</span>
       </button>
     </div>
   </div>
