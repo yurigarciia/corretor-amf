@@ -607,6 +607,116 @@
       opacity: 0.6;
     }
 
+    /* ── Modal Prompt ────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 680px;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.2s, background 0.2s;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: var(--text); background: var(--bg-card2); }
+
+    .modal-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .modal-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .prompt-textarea {
+      width: 100%;
+      min-height: 280px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      padding: 14px 16px;
+      resize: vertical;
+      white-space: pre-wrap;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-copy {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 20px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-copy:hover { background: var(--blue-light); }
+    .btn-copy.copied { background: var(--pass); }
+
     /* ── Footer ───────────────────────────────────────────────────────── */
     footer {
       text-align: center;
@@ -761,13 +871,42 @@
       <ul class="suggestions-list" id="suggestions-list"></ul>
     </div>
 
-    <!-- Nova análise -->
-    <button class="btn-secondary" onclick="resetApp()">
-      ↩ Nova análise
-    </button>
+    <!-- Ações -->
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="btn-secondary" id="prompt-btn" onclick="openPromptModal()">
+        ✨ Gerar Prompt de Correção
+      </button>
+      <button class="btn-secondary" onclick="resetApp()">
+        ↩ Nova análise
+      </button>
+    </div>
 
   </section>
 
+</div>
+
+<!-- Modal: Prompt de Correção -->
+<div class="modal-overlay" id="prompt-modal" onclick="closePromptOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">✨ Prompt de Correção para IA</span>
+      <button class="modal-close" onclick="closePromptModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">
+        Copie o prompt abaixo e cole em uma IA de sua escolha (ChatGPT, Gemini, Prism…)
+        junto com o trecho do seu trabalho que deseja corrigir.
+      </p>
+      <textarea class="prompt-textarea" id="prompt-textarea" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closePromptModal()">Fechar</button>
+      <button class="btn-copy" id="copy-btn" onclick="copyPrompt()">
+        <span id="copy-icon">📋</span>
+        <span id="copy-label">Copiar prompt</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- Footer -->
@@ -931,6 +1070,7 @@
 
   /* ── Renderização do resultado ────────────────────────────────────── */
   function renderResult(data) {
+    _lastResult = data;
     // Score
     const scoreEl = document.getElementById('score-value');
     const scoreNum = parseInt(data.score, 10) || 0;
@@ -1038,6 +1178,82 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  /* ── Modal de Prompt de Correção ──────────────────────────────────── */
+  let _lastResult = null;
+
+  function openPromptModal() {
+    if (!_lastResult) return;
+    document.getElementById('prompt-textarea').value = buildCorrectionPrompt(_lastResult);
+    document.getElementById('prompt-modal').classList.add('visible');
+    resetCopyBtn();
+  }
+
+  function closePromptModal() {
+    document.getElementById('prompt-modal').classList.remove('visible');
+  }
+
+  function closePromptOnOverlay(e) {
+    if (e.target === document.getElementById('prompt-modal')) closePromptModal();
+  }
+
+  function buildCorrectionPrompt(data) {
+    const fails = (data.criteria || []).filter(c => c.status === 'fail');
+    const warns = (data.criteria || []).filter(c => c.status === 'warn');
+    const docType = (data.criteria || []).find(c => c.name.toLowerCase().includes('tipo'))?.detail || '';
+
+    let lines = [];
+    lines.push('Você é um assistente especialista em normas acadêmicas da ABNT e da Antonio Meneghetti Faculdade (AMF).');
+    lines.push('');
+    if (docType) lines.push(`Tipo de documento: ${docType}`);
+    lines.push(`Score de conformidade atual: ${data.score}`);
+    lines.push('');
+    lines.push('A ferramenta CorretorAMF identificou os seguintes problemas no meu trabalho:');
+    lines.push('');
+
+    if (fails.length > 0) {
+      lines.push('❌ NÃO CONFORMES (corrigir obrigatoriamente):');
+      fails.forEach(c => lines.push(`  • ${c.name}: ${c.detail}`));
+      lines.push('');
+    }
+
+    if (warns.length > 0) {
+      lines.push('⚠️ ATENÇÃO (verificar):');
+      warns.forEach(c => lines.push(`  • ${c.name}: ${c.detail}`));
+      lines.push('');
+    }
+
+    if ((data.suggestions || []).length > 0) {
+      lines.push('Sugestões prioritárias:');
+      data.suggestions.forEach((s, i) => lines.push(`  ${i + 1}. ${s}`));
+      lines.push('');
+    }
+
+    lines.push('─'.repeat(50));
+    lines.push('Por favor, analise o trecho do meu trabalho abaixo e reescreva-o corrigindo');
+    lines.push('apenas os problemas listados acima. Mantenha o conteúdo e o estilo originais.');
+    lines.push('');
+    lines.push('[COLE SEU TEXTO AQUI]');
+
+    return lines.join('\n');
+  }
+
+  function copyPrompt() {
+    const textarea = document.getElementById('prompt-textarea');
+    navigator.clipboard.writeText(textarea.value).then(() => {
+      const btn = document.getElementById('copy-btn');
+      document.getElementById('copy-icon').textContent = '✅';
+      document.getElementById('copy-label').textContent = 'Copiado!';
+      btn.classList.add('copied');
+      setTimeout(resetCopyBtn, 2500);
+    });
+  }
+
+  function resetCopyBtn() {
+    document.getElementById('copy-icon').textContent = '📋';
+    document.getElementById('copy-label').textContent = 'Copiar prompt';
+    document.getElementById('copy-btn').classList.remove('copied');
   }
 </script>
 
