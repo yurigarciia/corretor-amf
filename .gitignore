@@ -47,3 +47,5 @@ tmp/
 
 # Manual original da AMF (direitos autorais — não versionar)
 *.pdf
+
+.vercel
