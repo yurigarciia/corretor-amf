@@ -576,10 +576,16 @@ async def analyze_document(
     except HTTPException:
         raise
     except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Limite de requisições da IA atingido. O sistema usa uma cota diária gratuita — aguarde alguns minutos e tente novamente.",
+            )
         logger.exception("Erro ao processar documento")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao analisar o documento: {str(e)}. Tente novamente.",
+            detail=f"Erro ao analisar o documento: {err_str}. Tente novamente.",
         )
 
     result.setdefault("score", "0%")

@@ -685,8 +685,8 @@
 
   <!-- Erro -->
   <section class="error-section" id="error-section">
-    <div class="error-icon">⚠️</div>
-    <div class="error-title">Algo deu errado</div>
+    <div class="error-icon" id="error-icon">⚠️</div>
+    <div class="error-title" id="error-title">Algo deu errado</div>
     <div class="error-msg" id="error-msg">Tente novamente em alguns instantes.</div>
     <button class="btn-secondary" style="margin-top:16px; width:auto; padding: 10px 24px;" onclick="resetApp()">
       ↩ Tentar novamente
@@ -870,8 +870,14 @@
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data.detail || `Erro ${res.status}: ${res.statusText}`;
-        showError(msg);
+        if (res.status === 429) {
+          showError(
+            'O sistema atingiu o limite diário de análises gratuitas. Aguarde alguns minutos e tente novamente — a cota é renovada periodicamente.',
+            true
+          );
+        } else {
+          showError(data.detail || `Erro ${res.status}: ${res.statusText}`);
+        }
         return;
       }
 
@@ -971,11 +977,13 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function showError(msg) {
+  function showError(msg, isRateLimit = false) {
     stepTimers.forEach(clearTimeout);
     loadingSection.classList.remove('visible');
     uploadSection.style.display = 'block';
     resultSection.classList.remove('visible');
+    document.getElementById('error-icon').textContent  = isRateLimit ? '⏳' : '⚠️';
+    document.getElementById('error-title').textContent = isRateLimit ? 'Limite de uso atingido' : 'Algo deu errado';
     errorMsg.textContent = msg;
     errorSection.classList.add('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
