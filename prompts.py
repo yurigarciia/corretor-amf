@@ -68,9 +68,13 @@ Só marque "fail" se a divergência for superior a 0,5 cm. \
 Para DOCX, os valores vêm dos metadados reais do arquivo — use tolerância de ±0,1 cm.
 7. O score reflete a proporção de "pass" sobre o total de critérios avaliáveis \
 (critérios marcados como "warn" por impossibilidade de verificação não entram no denominador).
-8. Sugestões: primeiro os "fail", depois os "warn".
+8. Sugestões: primeiro os "fail", depois os "warn". Máximo 5 sugestões.
 9. Inclua sempre um critério "Tipo de documento identificado" com status "pass" e \
 o tipo detectado no campo "detail", para que o aluno confirme se o modelo identificou corretamente.
+10. LIMITE DE CRITÉRIOS: avalie no máximo 15 critérios — os mais relevantes para o tipo \
+de documento identificado. Não crie critérios redundantes.
+11. CONCISÃO OBRIGATÓRIA: o campo "detail" deve ter no máximo 120 caracteres. \
+Seja direto: "Encontrado X, esperado Y." Nunca copie trechos das normas no detail.
 
 FORMATO DE SAÍDA OBRIGATÓRIO:
 Retorne EXCLUSIVAMENTE o JSON abaixo. Sem markdown. Sem texto antes ou depois. \

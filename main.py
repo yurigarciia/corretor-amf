@@ -460,12 +460,48 @@ def _parse_gemini_response(raw: str) -> dict:
         except json.JSONDecodeError:
             pass
 
+    # Fallback: tenta reparar JSON truncado (ex: MAX_TOKENS cortou no meio)
+    repaired = _repair_truncated_json(text)
+    if repaired:
+        logger.warning("JSON reparado após truncamento da resposta do modelo")
+        return repaired
+
     raise ValueError(f"Não foi possível extrair JSON válido da resposta do modelo: {raw[:200]}")
+
+
+def _repair_truncated_json(text: str) -> dict | None:
+    """
+    Tenta recuperar um JSON truncado (ex: cortado por MAX_TOKENS) fechando
+    as estruturas abertas a partir do último objeto completo encontrado.
+    """
+    # Remove markdown residual
+    text = re.sub(r"^```(?:json)?\s*", "", text.strip())
+    text = re.sub(r"\s*```$", "", text).strip()
+
+    last_brace = text.rfind("}")
+    if last_brace == -1:
+        return None
+
+    base = text[: last_brace + 1]
+    for closing in [
+        ', "suggestions": []}',
+        ', "suggestions": [], "score": "0%"}',
+        "]}",
+    ]:
+        try:
+            result = json.loads(base + closing)
+            result.setdefault("score", "0%")
+            result.setdefault("criteria", [])
+            result.setdefault("suggestions", [])
+            return result
+        except json.JSONDecodeError:
+            pass
+
+    return None
 
 
 def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
     """Chama o Gemini com o conteúdo extraído do documento como texto."""
-    # Trunca entrada para evitar inputs excessivamente longos em documentos grandes
     MAX_INPUT_CHARS = 80_000
     if len(document_text) > MAX_INPUT_CHARS:
         document_text = document_text[:MAX_INPUT_CHARS] + "\n\n[... documento truncado para análise ...]"
@@ -479,7 +515,7 @@ def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
         user_prompt,
         generation_config=genai.GenerationConfig(
             temperature=0.1,
-            max_output_tokens=8192,
+            max_output_tokens=16384,
         ),
         request_options={"timeout": 120},
     )
