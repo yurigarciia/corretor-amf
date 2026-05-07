@@ -465,6 +465,11 @@ def _parse_gemini_response(raw: str) -> dict:
 
 def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
     """Chama o Gemini com o conteúdo extraído do documento como texto."""
+    # Trunca entrada para evitar inputs excessivamente longos em documentos grandes
+    MAX_INPUT_CHARS = 80_000
+    if len(document_text) > MAX_INPUT_CHARS:
+        document_text = document_text[:MAX_INPUT_CHARS] + "\n\n[... documento truncado para análise ...]"
+
     model = genai.GenerativeModel(
         model_name=MODEL_NAME,
         system_instruction=SYSTEM_PROMPT,
@@ -474,10 +479,15 @@ def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
         user_prompt,
         generation_config=genai.GenerationConfig(
             temperature=0.1,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
         ),
         request_options={"timeout": 120},
     )
+
+    candidate = response.candidates[0] if response.candidates else None
+    if candidate and candidate.finish_reason.name != "STOP":
+        logger.warning("Gemini finish_reason: %s", candidate.finish_reason.name)
+
     return _parse_gemini_response(response.text)
 
 
