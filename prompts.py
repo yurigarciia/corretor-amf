@@ -73,8 +73,8 @@ Para DOCX, os valores vêm dos metadados reais do arquivo — use tolerância de
 o tipo detectado no campo "detail", para que o aluno confirme se o modelo identificou corretamente.
 10. LIMITE DE CRITÉRIOS: avalie no máximo 15 critérios — os mais relevantes para o tipo \
 de documento identificado. Não crie critérios redundantes.
-11. CONCISÃO OBRIGATÓRIA: o campo "detail" deve ter no máximo 120 caracteres. \
-Seja direto: "Encontrado X, esperado Y." Nunca copie trechos das normas no detail.
+11. CONCISÃO: o campo "detail" deve ter no máximo 250 caracteres. Seja específico: \
+mencione o que foi encontrado e o que era esperado. Nunca copie trechos longos das normas.
 
 FORMATO DE SAÍDA OBRIGATÓRIO:
 Retorne EXCLUSIVAMENTE o JSON abaixo. Sem markdown. Sem texto antes ou depois. \
