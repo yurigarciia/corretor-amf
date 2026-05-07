@@ -587,6 +587,24 @@
       color: var(--text);
     }
 
+    /* ── Aviso IA ────────────────────────────────────────────────────── */
+    .ai-disclaimer {
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+      opacity: 0.7;
+    }
+
+    .ai-disclaimer--result {
+      margin-top: 24px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      text-align: left;
+      opacity: 0.6;
+    }
+
     /* ── Footer ───────────────────────────────────────────────────────── */
     footer {
       text-align: center;
@@ -672,6 +690,10 @@
     <button class="btn-primary" id="analyze-btn" disabled>
       <span>🔍</span> Analisar conformidade
     </button>
+
+    <p class="ai-disclaimer">
+      Análise gerada por IA — resultados podem variar. Sempre valide com as normas oficiais e com seu orientador.
+    </p>
   </section>
 
   <!-- Loading -->
@@ -736,6 +758,10 @@
     <button class="btn-secondary" onclick="resetApp()">
       ↩ Nova análise
     </button>
+
+    <p class="ai-disclaimer ai-disclaimer--result">
+      ⚠ Este relatório é gerado por inteligência artificial e pode conter imprecisões. Cada envio pode produzir variações nos resultados. Use como referência complementar — a validação final deve ser feita com as normas AMF e seu orientador.
+    </p>
 
   </section>
 
