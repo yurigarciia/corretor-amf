@@ -826,7 +826,7 @@
         <input type="file" id="file-input" accept=".pdf,.docx" />
         <span class="drop-icon">📄</span>
         <div class="drop-title">Arraste o arquivo aqui ou clique para selecionar</div>
-        <div class="drop-sub">PDF ou DOCX • Máximo 10 MB</div>
+        <div class="drop-sub">PDF ou DOCX • Máximo 30 MB</div>
       </div>
 
       <div class="file-selected" id="file-selected">
@@ -1030,8 +1030,8 @@
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      showError(`Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)} MB. Limite: 10 MB.`);
+    if (file.size > 30 * 1024 * 1024) {
+      showError(`Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)} MB. Limite: 30 MB.`);
       return;
     }
 

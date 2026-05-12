@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_NAME = "gemini-3-flash-preview"
-MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_MB = 30
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 ALLOWED_MIME_TYPES = {
     "application/pdf": ".pdf",
@@ -502,7 +502,7 @@ def _repair_truncated_json(text: str) -> dict | None:
 
 def _call_gemini_with_text(document_text: str, extra_context: str) -> dict:
     """Chama o Gemini com o conteúdo extraído do documento como texto."""
-    MAX_INPUT_CHARS = 80_000
+    MAX_INPUT_CHARS = 200_000
     if len(document_text) > MAX_INPUT_CHARS:
         document_text = document_text[:MAX_INPUT_CHARS] + "\n\n[... documento truncado para análise ...]"
 
